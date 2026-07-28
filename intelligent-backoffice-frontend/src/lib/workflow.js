@@ -1,10 +1,10 @@
 export const WORKFLOW_STEPS = [
-  { key: 'CREATED', label: 'Caso aberto', group: 'intake' },
-  { key: 'DOCUMENTS_VALIDATED', label: 'Documentos validados', group: 'documents' },
-  { key: 'UNDER_INVESTIGATION', label: 'Investigação', group: 'analysis' },
-  { key: 'AWAITING_APPROVAL', label: 'Aguardando aprovação', group: 'approval' },
-  { key: 'APPROVED', label: 'Aprovado', group: 'execution' },
-  { key: 'EXECUTED', label: 'Executado', group: 'done' },
+  { key: 'CREATED', label: 'Caso aberto' },
+  { key: 'DOCUMENTS_VALIDATED', label: 'Documentos validados' },
+  { key: 'UNDER_INVESTIGATION', label: 'Investigação concluída' },
+  { key: 'AWAITING_APPROVAL', label: 'Aguardando aprovação' },
+  { key: 'APPROVED', label: 'Aprovado' },
+  { key: 'EXECUTED', label: 'Executado' },
 ]
 
 export const STATE_LABELS = {
@@ -17,10 +17,10 @@ export const STATE_LABELS = {
   AWAITING_APPROVAL: 'Aguardando aprovação',
   MORE_EVIDENCE_REQUIRED: 'Mais evidências necessárias',
   APPROVED: 'Aprovado',
-  REJECTED: 'Rejeitado',
   EXECUTION_PENDING: 'Execução pendente',
   EXECUTED: 'Executado',
   RECONCILIATION_REQUIRED: 'Reconciliação necessária',
+  REJECTED: 'Rejeitado',
   CLOSED: 'Encerrado',
   CANCELLED: 'Cancelado',
   EXPIRED: 'Expirado',
@@ -59,6 +59,33 @@ const STEP_INDEX = {
   FAILED: 5,
 }
 
+export function normalizeCase(value) {
+  if (!value) return null
+  return {
+    ...value,
+    caseId: value.caseId ?? value.case_id,
+    tenantId: value.tenantId ?? value.tenant_id,
+    externalReference: value.externalReference ?? value.external_id ?? value.external_reference,
+    disputeType: value.disputeType ?? value.dispute_type,
+    channel: value.channel,
+    state: value.state,
+    caseVersion: value.caseVersion ?? value.version ?? value.case_version,
+    priority: value.priority,
+    disputedAmount: value.disputedAmount ?? value.disputed_amount ?? {
+      currency: 'BRL',
+      amount: value.amount_cents !== undefined ? String(Number(value.amount_cents) / 100) : '0',
+    },
+    recommendationVersion: value.recommendationVersion ?? value.recommendation_version,
+    approvedRecommendationVersion: value.approvedRecommendationVersion ?? value.approved_recommendation_version,
+    createdAt: value.createdAt ?? value.created_at,
+    updatedAt: value.updatedAt ?? value.updated_at,
+  }
+}
+
+export function normalizeCases(values) {
+  return Array.isArray(values) ? values.map(normalizeCase) : []
+}
+
 export function formatState(state) {
   return STATE_LABELS[state] || state || 'Desconhecido'
 }
@@ -78,8 +105,8 @@ export function stateTone(state) {
   return 'info'
 }
 
-export function parseBrlToCents(value) {
-  if (typeof value === 'number') return Math.round(value * 100)
+export function parseBrl(value) {
+  if (typeof value === 'number') return value.toFixed(2)
   const normalized = String(value)
     .trim()
     .replace(/\s/g, '')
@@ -90,34 +117,40 @@ export function parseBrlToCents(value) {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error('Informe um valor monetário válido.')
   }
-  return Math.round(amount * 100)
+  return amount.toFixed(2)
 }
 
-export function formatCents(value) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format((Number(value) || 0) / 100)
+export function formatMoney(money) {
+  const currency = money?.currency || 'BRL'
+  const amount = Number(money?.amount || 0)
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency }).format(amount)
+}
+
+export function createUuid() {
+  return globalThis.crypto?.randomUUID?.() || '00000000-0000-4000-8000-000000000001'
 }
 
 export function createId(prefix = 'ui') {
-  const random = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
-  return `${prefix}-${random}`
+  return `${prefix}-${createUuid()}`
 }
 
-export function extractMetric(text, metricName) {
-  const line = String(text)
-    .split('\n')
-    .find((item) => item.startsWith(metricName) && !item.startsWith(`${metricName}_created`))
-  if (!line) return null
-  const value = Number(line.trim().split(/\s+/).at(-1))
-  return Number.isFinite(value) ? value : null
+export function createCommandHash(mode = 'SUCCESS') {
+  const marker = mode === 'AMBIGUOUS' ? 'ambiguous' : mode === 'FAILED' ? 'fail' : 'success'
+  return `${marker}-${createUuid().replaceAll('-', '')}`
+}
+
+export function requiredDocumentType(disputeType) {
+  if (disputeType === 'CARD_PURCHASE') return 'RECEIPT'
+  if (['PIX', 'TRANSFER', 'CASH_WITHDRAWAL'].includes(disputeType)) return 'TRANSACTION_PROOF'
+  return 'OTHER'
 }
 
 export function apiErrorMessage(payload, status) {
   const detail = payload?.detail
   if (typeof detail === 'string') return detail
   if (detail?.reason) return detail.reason
+  if (payload?.title && payload?.detail) return `${payload.title}: ${payload.detail}`
   if (payload?.title) return payload.title
+  if (status === 0) return 'Não foi possível conectar ao backend.'
   return `A plataforma retornou HTTP ${status}.`
 }
