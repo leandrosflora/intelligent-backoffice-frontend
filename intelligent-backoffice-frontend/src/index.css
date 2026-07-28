@@ -1,35 +1,41 @@
 :root {
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  color: #182238;
-  background: #f3f6fb;
+  color: #172033;
+  background: #f4f6f9;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --navy-950: #081426;
-  --navy-900: #0d1b31;
-  --navy-800: #142642;
-  --blue-700: #1e56d9;
-  --blue-600: #2d67e8;
+  --ink-950: #0b1020;
+  --ink-900: #111827;
+  --ink-800: #1f2937;
+  --ink-700: #344054;
+  --ink-600: #475467;
+  --ink-500: #667085;
+  --ink-400: #98a2b3;
+  --ink-300: #d0d5dd;
+  --ink-200: #e4e7ec;
+  --ink-100: #f2f4f7;
+  --surface: #ffffff;
+  --surface-soft: #f8fafc;
+  --brand-700: #0f6f68;
+  --brand-600: #13877f;
+  --brand-500: #1ba69b;
+  --brand-100: #dff7f3;
+  --blue-600: #2563eb;
   --blue-100: #eaf1ff;
-  --cyan-500: #10b6c7;
-  --green-600: #16815d;
-  --green-100: #e4f7ef;
-  --amber-600: #a86708;
-  --amber-100: #fff3d8;
-  --red-600: #c53e4a;
-  --red-100: #ffeaec;
-  --slate-900: #182238;
-  --slate-700: #47566e;
-  --slate-500: #748198;
-  --slate-300: #cad2df;
-  --slate-200: #dfe5ee;
-  --slate-100: #edf1f6;
-  --white: #ffffff;
-  --radius-sm: 8px;
-  --radius-md: 12px;
+  --green-700: #16794f;
+  --green-100: #e7f7ef;
+  --amber-700: #9a6412;
+  --amber-100: #fff5dc;
+  --red-700: #b23a47;
+  --red-100: #fdebed;
+  --radius-sm: 9px;
+  --radius-md: 13px;
   --radius-lg: 18px;
-  --shadow-sm: 0 1px 2px rgba(15, 32, 58, 0.06);
-  --shadow-md: 0 12px 32px rgba(16, 31, 58, 0.08);
+  --radius-xl: 24px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.05);
+  --shadow-md: 0 14px 36px rgba(16, 24, 40, 0.08);
+  --shadow-lg: 0 24px 60px rgba(10, 18, 35, 0.14);
 }
 
 * {
@@ -38,7 +44,9 @@
 
 html {
   min-width: 320px;
-  background: #f3f6fb;
+  min-height: 100%;
+  background: #f4f6f9;
+  scroll-behavior: smooth;
 }
 
 body {
@@ -61,7 +69,16 @@ select {
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.62;
+  opacity: 0.58;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible {
+  outline: 3px solid rgba(27, 166, 155, 0.28);
+  outline-offset: 2px;
 }
 
 a {
@@ -71,6 +88,22 @@ a {
 code,
 pre {
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+}
+
+::selection {
+  background: rgba(27, 166, 155, 0.24);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: #c5ccd6;
+  background-clip: padding-box;
 }
 
 #root {
