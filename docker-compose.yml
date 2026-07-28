@@ -3,7 +3,7 @@ services:
     build:
       context: .
     environment:
-      BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:8081}
+      BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:5260}
     ports:
       - "3000:80"
     extra_hosts:
