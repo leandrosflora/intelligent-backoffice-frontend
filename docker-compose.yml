@@ -5,7 +5,7 @@ services:
     environment:
       BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:5260}
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-3000}:80"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     restart: unless-stopped

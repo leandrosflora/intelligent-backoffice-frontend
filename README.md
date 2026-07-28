@@ -42,7 +42,33 @@ Na raiz deste repositório:
 docker compose up -d --build
 ```
 
-Acesse `http://localhost:3000`. O Nginx encaminha `/api` para `BACKEND_URL`, cujo padrão é `http://host.docker.internal:5260`.
+Acesse `http://localhost:3000`. O Nginx encaminha `/api` para `BACKEND_URL`, cujo padrão é `http://host.docker.internal:5260` (o backend rodando via `dotnet run`, passo 1).
+
+### 4. Stack completa via Docker Compose (backend + frontend)
+
+Validado localmente: backend `runtime` (Postgres + OPA + API, todos em container) e frontend, cada um com seu próprio `docker compose`.
+
+No repositório `intelligent-backoffice-platform`:
+
+```bash
+docker compose --profile runtime up --build -d
+```
+
+A API fica publicada em `http://localhost:8080` (não `5260` — esse é o padrão do `dotnet run`, não do container).
+
+Na raiz deste repositório, aponte o `BACKEND_URL` para a porta publicada acima:
+
+```bash
+BACKEND_URL=http://host.docker.internal:8080 docker compose up -d --build
+```
+
+Se a porta `3000` já estiver em uso/reservada na máquina (comum no Windows), publique em outra porta com `FRONTEND_PORT`:
+
+```bash
+BACKEND_URL=http://host.docker.internal:8080 FRONTEND_PORT=3001 docker compose up -d --build
+```
+
+Acesse `http://localhost:3000` (ou a porta escolhida em `FRONTEND_PORT`).
 
 ## Escopo da interface
 

@@ -145,6 +145,24 @@ export function requiredDocumentType(disputeType) {
   return 'OTHER'
 }
 
+// Backend's DocumentClassifier (docs/architecture/component-document-intelligence.md) scores
+// a document's storage-reference filename against its declared type using a fixed keyword
+// list per type (e.g. RECEIPT -> "comprovante-compra") — a filename with none of these
+// keywords makes it abstain (no Evidence record created), which then blocks
+// investigation.execute's evidence_present policy gate forever. Keeps the mock storage
+// reference this frontend sends aligned with that keyword list; OTHER has no keyword by
+// design (the backend always abstains for it), so it deliberately returns null here too.
+const DOCUMENT_CLASSIFIER_KEYWORDS = {
+  RECEIPT: 'comprovante-compra',
+  TRANSACTION_PROOF: 'comprovante-transacao',
+  IDENTITY_PROOF: 'identidade',
+  STATEMENT: 'extrato',
+}
+
+export function documentClassifierKeyword(documentType) {
+  return DOCUMENT_CLASSIFIER_KEYWORDS[documentType] || null
+}
+
 export function apiErrorMessage(payload, status) {
   const detail = payload?.detail
   if (typeof detail === 'string') return detail

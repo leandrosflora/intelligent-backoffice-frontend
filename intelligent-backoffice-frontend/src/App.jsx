@@ -8,6 +8,7 @@ import {
   apiErrorMessage,
   createCommandHash,
   createId,
+  documentClassifierKeyword,
   formatMoney,
   formatState,
   nextActionForState,
@@ -378,16 +379,18 @@ function App() {
     event.preventDefault()
     setBusy('document')
     try {
+      const documentType = requiredDocumentType(activeCase.disputeType)
+      const classifierKeyword = documentClassifierKeyword(documentType)
       const resource = await invoke('Registrar documento', client.request(
         `/v1/cases/${activeCase.caseId}/documents`,
         requestOptions('registerDocument', {
           method: 'POST',
           headers: { 'If-Match': String(activeCase.caseVersion) },
           body: {
-            documentType: requiredDocumentType(activeCase.disputeType),
+            documentType,
             mediaType: 'APPLICATION_PDF',
             checksum: 'a'.repeat(64),
-            storageReference: `mock://documents/${documentForm.filename}`,
+            storageReference: `mock://documents/${classifierKeyword ? `${classifierKeyword}-` : ''}${documentForm.filename}`,
           },
         }),
       ))
