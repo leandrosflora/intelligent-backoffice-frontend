@@ -57,13 +57,14 @@ export class PlatformClient {
       ),
       ...(options.headers || {}),
     }
-    if (options.body !== undefined) headers['Content-Type'] = 'application/json'
+    const isFormData = options.body instanceof FormData
+    if (options.body !== undefined && !isFormData) headers['Content-Type'] = 'application/json'
 
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
         method,
         headers,
-        body: options.body === undefined ? undefined : JSON.stringify(options.body),
+        body: options.body === undefined ? undefined : isFormData ? options.body : JSON.stringify(options.body),
       })
       return {
         ok: response.ok,

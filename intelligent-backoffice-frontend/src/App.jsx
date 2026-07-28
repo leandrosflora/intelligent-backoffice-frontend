@@ -8,9 +8,9 @@ import {
   apiErrorMessage,
   createCommandHash,
   createId,
-  documentClassifierKeyword,
   formatMoney,
   formatState,
+  mediaTypeForFilename,
   nextActionForState,
   normalizeCase,
   normalizeCases,
@@ -182,7 +182,7 @@ function App() {
     priority: 'NORMAL',
     amount: '120,00',
   })
-  const [documentForm, setDocumentForm] = useState({ filename: 'comprovante.pdf' })
+  const [documentForm, setDocumentForm] = useState({ file: null })
   const [approvalForm, setApprovalForm] = useState({ authorityLimit: '500,00', reason: 'Dentro da alçada delegada.' })
   const [executionMode, setExecutionMode] = useState('SUCCESS')
   const [reconciliationForm, setReconciliationForm] = useState({
@@ -377,21 +377,21 @@ function App() {
 
   async function registerDocument(event) {
     event.preventDefault()
+    if (!documentForm.file) return
     setBusy('document')
     try {
       const documentType = requiredDocumentType(activeCase.disputeType)
-      const classifierKeyword = documentClassifierKeyword(documentType)
+      const mediaType = mediaTypeForFilename(documentForm.file.name)
+      const formData = new FormData()
+      formData.append('documentType', documentType)
+      formData.append('mediaType', mediaType)
+      formData.append('file', documentForm.file)
       const resource = await invoke('Registrar documento', client.request(
         `/v1/cases/${activeCase.caseId}/documents`,
         requestOptions('registerDocument', {
           method: 'POST',
           headers: { 'If-Match': String(activeCase.caseVersion) },
-          body: {
-            documentType,
-            mediaType: 'APPLICATION_PDF',
-            checksum: 'a'.repeat(64),
-            storageReference: `mock://documents/${classifierKeyword ? `${classifierKeyword}-` : ''}${documentForm.filename}`,
-          },
+          body: formData,
         }),
       ))
       persistResources(activeCase.caseId, { document: resource })
@@ -682,7 +682,7 @@ function App() {
     )
 
     if (nextAction === 'registerDocument') {
-      return <Panel className="action-panel" title="Registrar documento" description={`Documento esperado para ${activeCase.disputeType}: ${requiredDocumentType(activeCase.disputeType)}.`} action={header}><form className="action-form" onSubmit={registerDocument}><label>Nome do arquivo<input value={documentForm.filename} onChange={(event) => setDocumentForm({ filename: event.target.value })} /></label><div className="metadata-row"><span>APPLICATION_PDF</span><span>Checksum SHA-256 sintético</span><span>If-Match: {activeCase.caseVersion}</span></div><button className="primary" disabled={busy === 'document'}>{busy === 'document' ? 'Registrando…' : 'Registrar e validar'}<Icon name="arrow" /></button></form></Panel>
+      return <Panel className="action-panel" title="Registrar documento" description={`Documento esperado para ${activeCase.disputeType}: ${requiredDocumentType(activeCase.disputeType)}.`} action={header}><form className="action-form" onSubmit={registerDocument}><label>Arquivo (PDF, JPG, PNG, DOCX ou XLSX)<input type="file" accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx" onChange={(event) => setDocumentForm({ file: event.target.files?.[0] || null })} /></label><div className="metadata-row"><span>{documentForm.file ? mediaTypeForFilename(documentForm.file.name) || 'Tipo de arquivo não suportado' : 'Nenhum arquivo selecionado'}</span><span>Classificação por IA/OCR</span><span>If-Match: {activeCase.caseVersion}</span></div><button className="primary" disabled={busy === 'document' || !documentForm.file}>{busy === 'document' ? 'Registrando…' : 'Registrar e validar'}<Icon name="arrow" /></button></form></Panel>
     }
     if (nextAction === 'investigate') {
       return <Panel className="action-panel" title="Executar investigação" description="Cruza transação, sinais de fraude, histórico do cliente e consistência documental." action={header}><div className="check-list">{['Transaction lookup', 'Fraud signal lookup', 'Customer history', 'Document consistency'].map((item) => <span key={item}><Icon name="check" />{item}</span>)}</div><button className="primary" onClick={investigate} disabled={busy === 'investigate'}>{busy === 'investigate' ? 'Investigando…' : 'Executar investigação'}<Icon name="arrow" /></button></Panel>
