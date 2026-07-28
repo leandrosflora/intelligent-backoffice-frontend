@@ -8,8 +8,9 @@ A aplicação não simula o lifecycle no navegador. Cada transição é enviada 
 
 - criação, listagem e consulta de casos;
 - jornada guiada pelo estado retornado pela API;
-- registro de documento sintético;
-- consulta de evidências;
+- upload real de PDF, PNG, JPG, DOCX e XLSX;
+- workspace dedicado de validação documental com IA/OCR;
+- consulta da evidência vinculada ao documento e da confiança da IA;
 - investigação e recomendação;
 - aprovação humana com alçada em `X-Authority-Limit`;
 - execução mock com sucesso, falha ou resultado ambíguo;
@@ -18,91 +19,128 @@ A aplicação não simula o lifecycle no navegador. Cada transição é enviada 
 - console local de requisições, identidades, latência, correlation ID e Problem Details;
 - modo manual para testar negações de policy.
 
-## Pré-requisito: subir o backend
+## Arquitetura do frontend
 
-No repositório `backoffice-platform-api`:
-
-```bash
-docker compose --profile runtime up -d postgres
-
-dotnet run --project src/Backoffice.Api
+```text
+src/
+├── api/client.js                 # fetch, headers de identidade e FormData
+├── config/identities.js          # identidades e papéis por operação
+├── lib/documentUpload.js         # validação de arquivo e interpretação da IA
+├── lib/workflow.js               # lifecycle, normalização e formatação
+├── App.jsx                       # console operacional e jornada guiada
+├── DocumentValidation.jsx        # workspace dedicado de IA documental
+├── Root.jsx                      # roteamento por hash e acesso ao workspace
+└── main.jsx
 ```
 
-A configuração padrão utiliza:
+## Pré-requisito: backend com Document Intelligence
+
+Mantenha o backend e a arquitetura como diretórios irmãos. No repositório `backoffice-platform-api`:
+
+```bash
+export OPENAI_API_KEY="sua-chave"
+docker compose --profile runtime up -d --build
+```
+
+PowerShell:
+
+```powershell
+$env:OPENAI_API_KEY="sua-chave"
+docker compose --profile runtime up -d --build
+```
+
+A configuração Docker padrão utiliza:
 
 | Dependência | Endereço |
 |---|---|
-| API HTTP | `http://localhost:5260` |
+| API HTTP | `http://localhost:8080` |
+| Document Intelligence | `http://localhost:8090` |
 | PostgreSQL | `localhost:5432` |
 | OPA/PDP | `http://localhost:8181` |
-
-O health check funciona sem executar uma ação de negócio. As operações governadas dependem do PDP disponível ou de `Opa__BaseUrl` apontando para um serviço compatível.
 
 ## Desenvolvimento local
 
 ```bash
-cd intelligent-backoffice-frontend
 npm ci
-npm run dev
+VITE_API_PROXY_TARGET=http://localhost:8080 npm run dev
 ```
 
-Abra `http://localhost:5173`.
+Abra:
 
-O Vite recebe chamadas em `/api` e as encaminha para:
+- `http://localhost:5173` para o console operacional;
+- `http://localhost:5173/#/document-validation` para o workspace de IA documental.
 
-```bash
-VITE_API_PROXY_TARGET=http://localhost:5260 npm run dev
-```
+O botão flutuante **Validar documento** também abre o workspace dedicado.
 
 ## Docker
 
-Execute a partir da raiz do repositório:
+A partir da raiz do repositório:
 
 ```bash
-docker compose up -d --build
+BACKEND_URL=http://host.docker.internal:8080 docker compose up -d --build
 ```
 
-Abra `http://localhost:3000`.
+Abra:
 
-O Nginx serve a SPA e encaminha `/api` para:
+- `http://localhost:3000` para o console;
+- `http://localhost:3000/#/document-validation` para validação documental.
 
-```bash
-BACKEND_URL=http://host.docker.internal:5260 docker compose up -d --build
+## Upload documental
+
+O navegador envia o arquivo real como `multipart/form-data`:
+
+```text
+documentType = RECEIPT
+mediaType    = APPLICATION_PDF
+file         = <conteúdo binário>
 ```
 
-## Contratos usados
+Headers relevantes:
 
-### Criar caso
-
-```json
-{
-  "externalReference": "ui-2026-001",
-  "disputeType": "CARD_PURCHASE",
-  "channel": "WEB",
-  "priority": "NORMAL",
-  "disputedAmount": {
-    "currency": "BRL",
-    "amount": "120.00"
-  }
-}
+```text
+If-Match: <caseVersion>
+X-Tenant-Id: <tenant>
+X-Subject-Id: document-processor-1
+X-Subject-Type: WORKLOAD
+X-Roles: document-processor
 ```
 
-### Registrar documento
+O frontend não calcula checksum nem cria `storageReference`. Esses valores são produzidos pelo backend depois que o arquivo é recebido.
 
-O console envia `If-Match` com `caseVersion` e registra metadados compatíveis com o backend:
+### Formatos
 
-```json
-{
-  "documentType": "RECEIPT",
-  "mediaType": "APPLICATION_PDF",
-  "checksum": "<sha-256 sintético>",
-  "storageReference": "mock://documents/comprovante.pdf"
-}
+| Extensão | Valor enviado em `mediaType` |
+|---|---|
+| `.pdf` | `APPLICATION_PDF` |
+| `.png` | `IMAGE_PNG` |
+| `.jpg`, `.jpeg` | `IMAGE_JPEG` |
+| `.docx` | `APPLICATION_DOCX` |
+| `.xlsx` | `APPLICATION_XLSX` |
+
+O workspace bloqueia arquivo vazio, formato não suportado e arquivos acima de 10 MB.
+
+## Interpretação do resultado da IA
+
+Depois do upload, o frontend consulta:
+
+```text
+GET /v1/cases/{caseId}
+GET /v1/cases/{caseId}/evidence
 ```
 
-### Execução governada
+A evidência cujo `sourceReference` corresponde ao `documentId` indica que a IA:
 
-A execução envia `Idempotency-Key` e utiliza os IDs reais da aprovação, recomendação e evidências. O `MockExecutionGateway` interpreta marcadores no `commandHash` para produzir sucesso, falha ou resultado ambíguo.
+1. classificou o documento sem abstention;
+2. encontrou o mesmo tipo declarado no upload;
+3. atingiu o confidence floor configurado no serviço.
+
+Resultados exibidos:
+
+- **Classificação confirmada pela IA:** há evidência e confiança;
+- **IA não confirmou o tipo declarado:** documento validado sem evidência;
+- **Documento rejeitado:** falha anterior à confirmação da IA, como malware scan.
+
+O backend atual não devolve `extractedFields` no `DocumentResponse`; por isso o frontend exibe a evidência persistida e a resposta técnica disponível.
 
 ## Modos de identidade
 
@@ -125,18 +163,7 @@ Mantém a identidade selecionada em todas as chamadas. Esse modo permite validar
 
 ## Continuidade da jornada
 
-O backend expõe listagem de casos, evidências, execuções e timeline. Entretanto, ainda não possui endpoints de consulta de recomendações e aprovações. Por isso, os recursos intermediários retornados durante a jornada são mantidos no `localStorage` por `caseId`.
-
-Ao abrir em outro navegador um caso já em `AWAITING_APPROVAL` ou `APPROVED`, pode ser necessário reiniciar a jornada ou informar esses IDs por uma futura tela de recuperação.
-
-## Limitações declaradas
-
-- identidade baseada em headers da baseline;
-- sem login JWT no frontend;
-- documentos representados por metadados, não upload binário;
-- execução financeira mock;
-- sem métricas, outbox, timers, DLQ ou replay expostos pelo backend HTTP atual;
-- solução de validação, não classificada como produção.
+O backend expõe listagem de casos, evidências, execuções e timeline. Recomendações e aprovações ainda não possuem endpoints de consulta; os recursos intermediários retornados durante a jornada são mantidos no `localStorage` por `caseId`.
 
 ## Qualidade
 
@@ -144,4 +171,19 @@ Ao abrir em outro navegador um caso já em `AWAITING_APPROVAL` ou `APPROVED`, po
 npm run check
 ```
 
-O comando executa ESLint, testes unitários do modelo de workflow e build Vite. O GitHub Actions também valida a imagem Docker e o Compose.
+O comando executa:
+
+```text
+ESLint → testes Node → build Vite
+```
+
+Os testes de upload cobrem formatos, tamanho, arquivo vazio, vínculo da evidência e interpretação de confirmação, abstention e rejeição.
+
+## Limitações declaradas
+
+- identidade baseada em headers da baseline;
+- sem login JWT no frontend;
+- análise real dependente da OpenAI e sujeita a custo;
+- execução financeira mock;
+- campos extraídos pela IA ainda não expostos pela API principal;
+- solução de validação, não classificada como produção.
