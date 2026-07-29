@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 
 import { PlatformClient } from './api/client.js'
+import { documentRegistrationNotice } from './lib/documentUpload.js'
 import { ACTION_IDENTITIES, IDENTITIES, IDENTITY_OPTIONS } from './config/identities.js'
 import {
   WORKFLOW_STEPS,
@@ -397,7 +398,8 @@ function App() {
       persistResources(activeCase.caseId, { document: resource })
       await fetchCase(activeCase.caseId, { label: 'Atualizar caso após documento' })
       await loadCaseData(activeCase.caseId)
-      showNotice('success', 'Documento validado e evidência criada.')
+      const registrationNotice = documentRegistrationNotice(resource)
+      showNotice(registrationNotice.type, registrationNotice.message)
     } catch {
       // handled by invoke
     } finally {
@@ -682,7 +684,7 @@ function App() {
     )
 
     if (nextAction === 'registerDocument') {
-      return <Panel className="action-panel" title="Registrar documento" description={`Documento esperado para ${activeCase.disputeType}: ${requiredDocumentType(activeCase.disputeType)}.`} action={header}><form className="action-form" onSubmit={registerDocument}><label>Arquivo (PDF, JPG, PNG, DOCX ou XLSX)<input type="file" accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx" onChange={(event) => setDocumentForm({ file: event.target.files?.[0] || null })} /></label><div className="metadata-row"><span>{documentForm.file ? mediaTypeForFilename(documentForm.file.name) || 'Tipo de arquivo não suportado' : 'Nenhum arquivo selecionado'}</span><span>Classificação por IA/OCR</span><span>If-Match: {activeCase.caseVersion}</span></div><button className="primary" disabled={busy === 'document' || !documentForm.file}>{busy === 'document' ? 'Registrando…' : 'Registrar e validar'}<Icon name="arrow" /></button></form></Panel>
+      return <Panel className="action-panel" title="Registrar documento" description={`Documento esperado para ${activeCase.disputeType}: ${requiredDocumentType(activeCase.disputeType)}.`} action={header}><form className="action-form" onSubmit={registerDocument}><label>Arquivo (PDF, JPG, PNG, DOCX ou XLSX)<input type="file" accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx" onChange={(event) => setDocumentForm({ file: event.target.files?.[0] || null })} /></label><div className="metadata-row"><span>{documentForm.file ? mediaTypeForFilename(documentForm.file.name) || 'Tipo de arquivo não suportado' : 'Nenhum arquivo selecionado'}</span><span>IA/OCR com revisão humana</span><span>If-Match: {activeCase.caseVersion}</span></div><button className="primary" disabled={busy === 'document' || !documentForm.file}>{busy === 'document' ? 'Registrando…' : 'Registrar e analisar'}<Icon name="arrow" /></button></form></Panel>
     }
     if (nextAction === 'investigate') {
       return <Panel className="action-panel" title="Executar investigação" description="Cruza transação, sinais de fraude, histórico do cliente e consistência documental." action={header}><div className="check-list">{['Transaction lookup', 'Fraud signal lookup', 'Customer history', 'Document consistency'].map((item) => <span key={item}><Icon name="check" />{item}</span>)}</div><button className="primary" onClick={investigate} disabled={busy === 'investigate'}>{busy === 'investigate' ? 'Investigando…' : 'Executar investigação'}<Icon name="arrow" /></button></Panel>
@@ -734,6 +736,12 @@ function App() {
 
         <div className="case-workspace">
           <div className="case-primary-column">
+            {activeResources.document?.status === 'REVIEW_REQUIRED' && (
+              <div className="document-review-banner" role="status">
+                <span><Icon name="alert" /></span>
+                <div><strong>Revisão documental necessária</strong><p>A IA não confirmou o tipo declarado. Este documento não avançou o caso; revise-o ou envie outro arquivo válido.</p></div>
+              </div>
+            )}
             {renderActionPanel()}
             <Panel title="Recursos da jornada" description="Identificadores persistidos no workspace local para continuidade entre etapas.">
               <div className="resource-grid">
