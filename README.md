@@ -11,6 +11,7 @@ Console React para operar e validar o backend [.NET Backoffice Platform API](htt
 - upload `multipart/form-data` de PDF, PNG, JPG, DOCX e XLSX;
 - classificação documental com IA, abstention e evidência com confiança;
 - investigação, recomendação e aprovação humana;
+- reidratação de recomendações e aprovações persistidas pelo backend;
 - execução governada, idempotência e reconciliação;
 - evidências, execuções, timeline e console HTTP;
 - modo guiado ou identidade manual para testar policies.
@@ -32,7 +33,7 @@ O workspace dedicado:
 - diferencia confirmação da IA, abstention/divergência e rejeição;
 - mostra confiança, checksum, correlation ID, latência e respostas técnicas.
 
-A evidência só é criada quando a IA não abstém e a classificação encontrada corresponde ao tipo documental declarado. Um documento pode ficar `VALIDATED` sem gerar evidência quando o modelo abstém, identifica outro tipo ou o serviço de análise fica indisponível.
+A evidência só é criada quando a IA não abstém e a classificação encontrada corresponde ao tipo documental declarado. Em caso de abstention ou divergência, o documento fica em `REVIEW_REQUIRED`, sem evidência, e o caso permanece em `DOCUMENTS_RECEIVED` para revisão manual.
 
 ## Pré-requisitos
 
@@ -120,7 +121,7 @@ BACKEND_URL=http://host.docker.internal:8080 FRONTEND_PORT=3001 docker compose u
 5. Envie o documento.
 6. Verifique o resultado:
    - **Classificação confirmada:** evidência criada com confiança;
-   - **IA não confirmou:** documento processado sem evidência;
+   - **IA não confirmou:** documento encaminhado para revisão manual, sem evidência;
    - **Documento rejeitado:** malware scan ou validação anterior à IA falhou.
 
 Tipos esperados por jornada:
@@ -169,7 +170,6 @@ O comando executa ESLint, testes Node e build Vite. Os testes cobrem mapeamento 
 - o frontend usa as identidades por headers da baseline; o profile JWT ainda não possui login no navegador;
 - a análise real consome a API da OpenAI e pode gerar custo;
 - os campos extraídos pela IA ainda não são retornados no `DocumentResponse`; a UI confirma a análise pela evidência persistida;
-- recomendações e aprovações intermediárias continuam no `localStorage`, pois o backend não expõe consulta desses recursos;
 - a execução financeira permanece mock;
 - solução demonstrativa, não classificada como pronta para produção.
 
