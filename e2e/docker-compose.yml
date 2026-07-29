@@ -34,7 +34,7 @@ services:
       ConnectionStrings__Backoffice: Host=postgres;Port=5432;Database=backoffice;Username=backoffice;Password=backoffice
       Opa__BaseUrl: http://opa:8181
       Identity__Mode: headers
-      DocumentIntelligence__BaseUrl: http://document-intelligence.invalid
+      DocumentIntelligence__Mode: Fake
     ports:
       - "8080:8080"
     depends_on:
