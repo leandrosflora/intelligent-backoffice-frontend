@@ -23,7 +23,7 @@ export default function Root() {
       <App />
       <a className="ai-validator-launcher" href="#/document-validation">
         <span>AI</span>
-        <div><strong>Validar documento</strong><small>Upload real + evidência</small></div>
+        <div><strong>Validar documento</strong><small>Upload real + revisão humana</small></div>
       </a>
     </>
   )
