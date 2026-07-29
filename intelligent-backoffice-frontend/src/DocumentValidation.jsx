@@ -35,7 +35,7 @@ function ResultCard({ label, value, detail }) {
   )
 }
 
-export default function DocumentValidation() {
+export default function DocumentValidation({ auth }) {
   const [apiBaseUrl, setApiBaseUrl] = useState(() => localStorage.getItem('backoffice-ui-api') || '/api')
   const [tenantId, setTenantId] = useState(() => localStorage.getItem('backoffice-ui-tenant') || 'tenant-demo')
   const [caseId, setCaseId] = useState(() => localStorage.getItem('backoffice-ai-case-id') || '')
@@ -49,7 +49,13 @@ export default function DocumentValidation() {
   const [caseSnapshot, setCaseSnapshot] = useState(null)
   const [requestMeta, setRequestMeta] = useState(null)
 
-  const client = useMemo(() => new PlatformClient(apiBaseUrl), [apiBaseUrl])
+  const isOidc = auth.mode === 'oidc'
+  const effectiveTenantId = isOidc ? auth.claims.tenantId : tenantId
+  const client = useMemo(() => new PlatformClient(apiBaseUrl, {
+    authMode: auth.mode,
+    getAccessToken: auth.getAccessToken,
+    identityLabel: auth.claims.displayName,
+  }), [apiBaseUrl, auth.claims.displayName, auth.getAccessToken, auth.mode])
   const validation = useMemo(() => validateDocumentFile(file), [file])
   const matchedEvidence = useMemo(
     () => findDocumentEvidence(evidence, documentResult?.documentId),
@@ -102,7 +108,7 @@ export default function DocumentValidation() {
       const formData = buildDocumentFormData(file, documentType)
       const upload = await client.request(`/v1/cases/${caseId.trim()}/documents`, {
         method: 'POST',
-        tenantId,
+        tenantId: effectiveTenantId,
         identity: IDENTITIES.documentProcessor,
         headers: { 'If-Match': String(version) },
         body: formData,
@@ -119,11 +125,11 @@ export default function DocumentValidation() {
 
       const [evidenceResponse, caseResponse] = await Promise.all([
         client.request(`/v1/cases/${caseId.trim()}/evidence`, {
-          tenantId,
+          tenantId: effectiveTenantId,
           identity: IDENTITIES.analyst,
         }),
         client.request(`/v1/cases/${caseId.trim()}`, {
-          tenantId,
+          tenantId: effectiveTenantId,
           identity: IDENTITIES.caseManager,
         }),
       ])
@@ -152,9 +158,9 @@ export default function DocumentValidation() {
           <p>Envie um arquivo real para o backend .NET e acompanhe se a IA confirmou o tipo ou encaminhou o documento para revisão humana.</p>
         </div>
         <div className="validator-header-status">
-          <span>Fluxo real</span>
-          <strong>multipart/form-data</strong>
-          <small>PDF · PNG · JPG · DOCX · XLSX</small>
+          <span>{isOidc ? 'Sessão OIDC' : 'Fluxo real'}</span>
+          <strong>{isOidc ? auth.claims.displayName : 'multipart/form-data'}</strong>
+          <small>{isOidc ? effectiveTenantId || 'tenant_id ausente' : 'PDF · PNG · JPG · DOCX · XLSX'}</small>
         </div>
       </header>
 
@@ -180,7 +186,11 @@ export default function DocumentValidation() {
               <input value={apiBaseUrl} onChange={(event) => updateApiBaseUrl(event.target.value)} />
             </label>
             <label>Tenant ID
-              <input value={tenantId} onChange={(event) => updateTenantId(event.target.value)} />
+              <input
+                value={isOidc ? effectiveTenantId || 'claim tenant_id ausente' : tenantId}
+                disabled={isOidc}
+                onChange={(event) => updateTenantId(event.target.value)}
+              />
             </label>
             <label>Versão do caso
               <input type="number" min="1" value={caseVersion} onChange={(event) => setCaseVersion(event.target.value)} />
@@ -205,6 +215,7 @@ export default function DocumentValidation() {
           <div className="validator-policy-note">
             <strong>O que será validado</strong>
             <p>Verificação de segurança configurada no backend, checksum SHA-256, classificação independente do tipo declarado e evidência apenas quando a IA confirma o tipo. Abstention ou divergência exige revisão humana.</p>
+            {isOidc && <p>A API usará exclusivamente o bearer token atual. Se a policy exigir outro tipo de sujeito ou papel, a operação será negada sem simular uma identidade no navegador.</p>}
           </div>
 
           {error && <div className="validator-alert validator-alert-danger">{error}</div>}

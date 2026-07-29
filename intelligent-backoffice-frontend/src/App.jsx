@@ -11,6 +11,7 @@ import {
   createId,
   formatMoney,
   formatState,
+  latestWorkflowResource,
   mediaTypeForFilename,
   nextActionForState,
   normalizeCase,
@@ -157,7 +158,7 @@ function copyText(value) {
   navigator.clipboard.writeText(String(value)).catch(() => {})
 }
 
-function App() {
+function App({ auth }) {
   const [view, setView] = useState('dashboard')
   const [apiBaseUrl, setApiBaseUrl] = useState(() => localStorage.getItem('backoffice-ui-api') || '/api')
   const [tenantId, setTenantId] = useState(() => localStorage.getItem('backoffice-ui-tenant') || 'tenant-demo')
@@ -191,8 +192,25 @@ function App() {
     reason: 'O sistema de registro confirmou o resultado da execução mock.',
   })
 
-  const client = useMemo(() => new PlatformClient(apiBaseUrl), [apiBaseUrl])
+  const isOidc = auth.mode === 'oidc'
   const selectedIdentity = IDENTITIES[identityId]
+  const effectiveTenantId = isOidc
+    ? auth.claims.tenantId || 'tenant_id ausente'
+    : tenantId
+  const authenticatedIdentity = {
+    label: auth.claims.displayName,
+    subjectId: auth.claims.subjectId,
+    subjectType: auth.claims.subjectType,
+    roles: auth.claims.roles,
+  }
+  const identityModeLabel = isOidc
+    ? `${auth.claims.displayName} · OIDC`
+    : guidedMode ? 'Modo guiado' : selectedIdentity?.label
+  const client = useMemo(() => new PlatformClient(apiBaseUrl, {
+    authMode: auth.mode,
+    getAccessToken: auth.getAccessToken,
+    identityLabel: auth.claims.displayName,
+  }), [apiBaseUrl, auth.claims.displayName, auth.getAccessToken, auth.mode])
   const activeResources = activeCase ? resources[activeCase.caseId] || {} : {}
   const nextAction = activeCase ? nextActionForState(activeCase.state) : null
   const activeNav = NAV_ITEMS.find((item) => item.id === view) || NAV_ITEMS[0]
@@ -236,6 +254,7 @@ function App() {
   }, [client])
 
   function identityFor(action) {
+    if (isOidc) return authenticatedIdentity
     return guidedMode ? IDENTITIES[ACTION_IDENTITIES[action]] : selectedIdentity
   }
 
@@ -269,7 +288,7 @@ function App() {
 
   function requestOptions(action, extra = {}) {
     return {
-      tenantId,
+      tenantId: effectiveTenantId,
       identity: identityFor(action),
       ...extra,
     }
@@ -328,22 +347,35 @@ function App() {
 
   async function loadCaseData(caseId = activeCase?.caseId) {
     if (!caseId) return
-    const [evidenceResult, executionsResult, timelineResult] = await Promise.all([
+    const [evidenceResult, executionsResult, timelineResult, recommendationsResult, approvalsResult] = await Promise.all([
       client.request(`/v1/cases/${caseId}/evidence`, requestOptions('readEvidence')),
       client.request(`/v1/cases/${caseId}/executions`, requestOptions('readExecution')),
       client.request(`/v1/cases/${caseId}/timeline`, requestOptions('timeline')),
+      client.request(`/v1/cases/${caseId}/recommendations`, requestOptions('readCase')),
+      client.request(`/v1/cases/${caseId}/approvals`, requestOptions('readCase')),
     ])
     addLog('Consultar evidências', evidenceResult)
     addLog('Consultar execuções', executionsResult)
     addLog('Consultar timeline', timelineResult)
+    addLog('Consultar recomendações', recommendationsResult)
+    addLog('Consultar aprovações', approvalsResult)
     if (evidenceResult.ok) setEvidence(Array.isArray(evidenceResult.data) ? evidenceResult.data : [])
     if (executionsResult.ok) {
       const values = Array.isArray(executionsResult.data) ? executionsResult.data : []
       setExecutions(values)
-      const latest = values.at(-1)
+      const latest = latestWorkflowResource(values)
       if (latest?.executionId) persistResources(caseId, { execution: latest })
     }
     if (timelineResult.ok) setTimeline(Array.isArray(timelineResult.data) ? timelineResult.data : [])
+
+    const resourcePatch = {}
+    if (recommendationsResult.ok) {
+      resourcePatch.recommendation = latestWorkflowResource(recommendationsResult.data)
+    }
+    if (approvalsResult.ok) {
+      resourcePatch.approval = latestWorkflowResource(approvalsResult.data)
+    }
+    if (Object.keys(resourcePatch).length > 0) persistResources(caseId, resourcePatch)
   }
 
   async function createCase(event) {
@@ -471,7 +503,7 @@ function App() {
         `/v1/cases/${activeCase.caseId}/approvals`,
         requestOptions('approve', {
           method: 'POST',
-          authorityLimit: parseBrl(approvalForm.authorityLimit),
+          authorityLimit: isOidc ? undefined : parseBrl(approvalForm.authorityLimit),
           body: {
             caseVersion: activeCase.caseVersion,
             recommendationId: recommendation.recommendationId,
@@ -604,8 +636,8 @@ function App() {
           </div>
           <div className="hero-context">
             <span>Contexto ativo</span>
-            <strong>{tenantId}</strong>
-            <div><Icon name="users" /><span>{guidedMode ? 'Identidades por etapa' : selectedIdentity.label}</span></div>
+            <strong>{effectiveTenantId}</strong>
+            <div><Icon name="users" /><span>{identityModeLabel}</span></div>
             <div><Icon name="database" /><span>{apiBaseUrl}</span></div>
           </div>
         </section>
@@ -636,9 +668,24 @@ function App() {
             </div>
             <div className="form-grid compact-form">
               <label>Base URL<input value={apiBaseUrl} onChange={(event) => updateApi(event.target.value)} /></label>
-              <label>Tenant ID<input value={tenantId} onChange={(event) => updateTenant(event.target.value)} /></label>
-              <label>Identidade manual<select value={identityId} onChange={(event) => setIdentityId(event.target.value)}>{IDENTITY_OPTIONS.map((identity) => <option key={identity.id} value={identity.id}>{identity.label}</option>)}</select></label>
-              <label className="toggle-row"><span><strong>Modo guiado</strong><small>Seleciona automaticamente o papel autorizado.</small></span><input type="checkbox" checked={guidedMode} onChange={(event) => setGuidedMode(event.target.checked)} /></label>
+              {isOidc ? (
+                <div className="authenticated-context">
+                  <span><strong>{auth.claims.displayName}</strong><small>{auth.claims.subjectId || 'Claim sub ausente'}</small></span>
+                  <dl>
+                    <div><dt>Tenant</dt><dd>{auth.claims.tenantId || 'claim ausente'}</dd></div>
+                    <div><dt>Tipo</dt><dd>{auth.claims.subjectType || 'claim ausente'}</dd></div>
+                    <div><dt>Papéis</dt><dd>{auth.claims.roles.join(', ') || 'claim ausente'}</dd></div>
+                    <div><dt>Alçada</dt><dd>{auth.claims.authorityLimit === '' ? 'claim ausente' : auth.claims.authorityLimit}</dd></div>
+                  </dl>
+                  <p>Tenant, identidade, papéis e alçada vêm do token. A interface não envia headers alternativos.</p>
+                </div>
+              ) : (
+                <>
+                  <label>Tenant ID<input value={tenantId} onChange={(event) => updateTenant(event.target.value)} /></label>
+                  <label>Identidade manual<select value={identityId} onChange={(event) => setIdentityId(event.target.value)}>{IDENTITY_OPTIONS.map((identity) => <option key={identity.id} value={identity.id}>{identity.label}</option>)}</select></label>
+                  <label className="toggle-row"><span><strong>Modo guiado</strong><small>Seleciona automaticamente o papel autorizado.</small></span><input type="checkbox" checked={guidedMode} onChange={(event) => setGuidedMode(event.target.checked)} /></label>
+                </>
+              )}
             </div>
           </Panel>
         </div>
@@ -693,7 +740,7 @@ function App() {
       return <Panel className="action-panel" title="Criar recomendação" description="O agente de decisão usa a investigação persistida para produzir a recomendação versionada." action={header}><div className="action-note"><Icon name="bolt" /><div><strong>Decisão assistida por agente</strong><p>A recomendação permanece sujeita à aprovação humana e à segregação de funções.</p></div></div><button className="primary" onClick={recommend} disabled={busy === 'recommend'}>{busy === 'recommend' ? 'Processando…' : 'Gerar recomendação'}<Icon name="arrow" /></button></Panel>
     }
     if (nextAction === 'approve') {
-      return <Panel className="action-panel" title="Aprovação humana" description="A decisão é registrada com justificativa, evidências e limite de alçada." action={header}><form className="form-grid form-grid-2" onSubmit={approve}><label>Limite de alçada<input inputMode="decimal" value={approvalForm.authorityLimit} onChange={(event) => setApprovalForm({ ...approvalForm, authorityLimit: event.target.value })} /></label><label className="span-2">Justificativa<textarea value={approvalForm.reason} onChange={(event) => setApprovalForm({ ...approvalForm, reason: event.target.value })} /></label><div className="form-footer span-2"><span><Icon name="shield" />{evidence.length} evidência(s) serão vinculadas à decisão.</span><button className="primary" disabled={busy === 'approve'}>{busy === 'approve' ? 'Aprovando…' : 'Aprovar recomendação'}<Icon name="arrow" /></button></div></form></Panel>
+      return <Panel className="action-panel" title="Aprovação humana" description="A decisão é registrada com justificativa, evidências e limite de alçada." action={header}><form className="form-grid form-grid-2" onSubmit={approve}><label>Limite de alçada<input inputMode="decimal" value={isOidc ? auth.claims.authorityLimit : approvalForm.authorityLimit} disabled={isOidc} onChange={(event) => setApprovalForm({ ...approvalForm, authorityLimit: event.target.value })} />{isOidc && <small>Valor imutável da claim <code>authority_limit</code>.</small>}</label><label className="span-2">Justificativa<textarea value={approvalForm.reason} onChange={(event) => setApprovalForm({ ...approvalForm, reason: event.target.value })} /></label><div className="form-footer span-2"><span><Icon name="shield" />{evidence.length} evidência(s) serão vinculadas à decisão.</span><button className="primary" disabled={busy === 'approve' || (isOidc && auth.claims.authorityLimit === '')}>{busy === 'approve' ? 'Aprovando…' : 'Aprovar recomendação'}<Icon name="arrow" /></button></div></form></Panel>
     }
     if (nextAction === 'execute') {
       return <Panel className="action-panel" title="Execução governada" description="Simule o resultado do gateway mantendo idempotência, evidências e rastreabilidade." action={header}><div className="execution-options">{[{ value: 'SUCCESS', label: 'Sucesso', detail: 'Confirma a execução', tone: 'success' }, { value: 'AMBIGUOUS', label: 'Ambíguo', detail: 'Exige reconciliação', tone: 'warning' }, { value: 'FAILED', label: 'Falha', detail: 'Registra erro controlado', tone: 'danger' }].map((option) => <label className={`execution-option option-${option.tone} ${executionMode === option.value ? 'selected' : ''}`} key={option.value}><input type="radio" name="executionMode" value={option.value} checked={executionMode === option.value} onChange={(event) => setExecutionMode(event.target.value)} /><span><strong>{option.label}</strong><small>{option.detail}</small></span></label>)}</div><button className="primary" onClick={execute} disabled={busy === 'execute'}>{busy === 'execute' ? 'Executando…' : 'Solicitar execução'}<Icon name="arrow" /></button></Panel>
@@ -728,7 +775,7 @@ function App() {
         <WorkflowRail state={activeCase.state} />
 
         <div className="metrics-grid case-metrics">
-          <MetricCard icon="database" label="Versão do caso" value={`v${activeCase.caseVersion}`} detail={`Tenant ${activeCase.tenantId || tenantId}`} />
+          <MetricCard icon="database" label="Versão do caso" value={`v${activeCase.caseVersion}`} detail={`Tenant ${activeCase.tenantId || effectiveTenantId}`} />
           <MetricCard icon="activity" label="Valor em disputa" value={formatMoney(activeCase.disputedAmount)} detail={activeCase.disputeType} tone="blue" />
           <MetricCard icon="alert" label="Prioridade" value={activeCase.priority || 'NORMAL'} detail={`Canal ${activeCase.channel || 'não informado'}`} tone={activeCase.priority === 'CRITICAL' ? 'warning' : 'neutral'} />
           <MetricCard icon="clock" label="Última atualização" value={formatDateTime(activeCase.updatedAt || activeCase.createdAt)} detail="Timestamp do backend" />
@@ -743,7 +790,7 @@ function App() {
               </div>
             )}
             {renderActionPanel()}
-            <Panel title="Recursos da jornada" description="Identificadores persistidos no workspace local para continuidade entre etapas.">
+            <Panel title="Recursos da jornada" description="Recursos persistidos pelo backend e mantidos em cache local para continuidade entre etapas.">
               <div className="resource-grid">
                 {resourceKeys.map(([key, label]) => {
                   const value = activeResources[key]?.[`${key}Id`]
@@ -756,7 +803,7 @@ function App() {
           <aside className="case-side-column">
             <Panel className="case-context-card" title="Contexto de governança">
               <dl className="context-list">
-                <div><dt>Modo de identidade</dt><dd>{guidedMode ? 'Guiado por etapa' : 'Manual'}</dd></div>
+                <div><dt>Modo de identidade</dt><dd>{isOidc ? 'OIDC/JWT' : guidedMode ? 'Guiado por etapa' : 'Manual'}</dd></div>
                 <div><dt>Papel da próxima ação</dt><dd>{nextAction ? identityFor(nextAction)?.label : 'Nenhum'}</dd></div>
                 <div><dt>Evidências vinculadas</dt><dd>{evidence.length}</dd></div>
                 <div><dt>Execuções registradas</dt><dd>{executions.length}</dd></div>
@@ -859,7 +906,7 @@ function App() {
         )}
 
         <div className="sidebar-footer">
-          <div className="sidebar-status"><span className={health?.status === 'ok' ? 'dot online' : 'dot'} /><div><strong>{health?.status === 'ok' ? 'API conectada' : 'API indisponível'}</strong><small>{tenantId}</small></div><button onClick={checkHealth} aria-label="Verificar API"><Icon name="refresh" size={15} /></button></div>
+          <div className="sidebar-status"><span className={health?.status === 'ok' ? 'dot online' : 'dot'} /><div><strong>{health?.status === 'ok' ? 'API conectada' : 'API indisponível'}</strong><small>{effectiveTenantId}</small></div><button onClick={checkHealth} aria-label="Verificar API"><Icon name="refresh" size={15} /></button></div>
           <small>Frontend v0.2 · React 19</small>
         </div>
       </aside>
@@ -867,7 +914,7 @@ function App() {
       <div className="main-area">
         <header className="topbar">
           <div className="breadcrumbs"><span>Intelligent Backoffice</span><Icon name="chevron" size={14} /><strong>{activeNav.label}</strong></div>
-          <div className="topbar-context"><span className={`environment-badge ${health?.status === 'ok' ? 'online' : ''}`}>{health?.status === 'ok' ? 'Online' : 'Offline'}</span><span>{guidedMode ? 'Modo guiado' : selectedIdentity.label}</span><button className="icon-button" title="Configurações da conexão" onClick={() => setView('dashboard')}><Icon name="settings" /></button></div>
+          <div className="topbar-context"><span className={`environment-badge ${health?.status === 'ok' ? 'online' : ''}`}>{health?.status === 'ok' ? 'Online' : 'Offline'}</span><span>{identityModeLabel}</span>{isOidc && <button className="session-button" onClick={auth.logout}>Sair</button>}<button className="icon-button" title="Configurações da conexão" onClick={() => setView('dashboard')}><Icon name="settings" /></button></div>
         </header>
         <main>
           {notice && <div className={`notice notice-${notice.type}`} role="status"><Icon name={notice.type === 'success' ? 'check' : 'alert'} />{notice.message}</div>}

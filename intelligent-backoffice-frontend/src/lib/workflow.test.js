@@ -5,6 +5,7 @@ import {
   createCommandHash,
   formatMoney,
   formatState,
+  latestWorkflowResource,
   nextActionForState,
   normalizeCase,
   parseBrl,
@@ -45,6 +46,15 @@ test('normaliza respostas antigas e atuais de Case', () => {
   assert.equal(legacy.caseId, 'case-2')
   assert.equal(legacy.caseVersion, 3)
   assert.equal(legacy.disputedAmount.amount, '15')
+})
+
+test('seleciona o recurso mais recente de uma resposta ordenada', () => {
+  const first = { recommendationId: 'rec-1' }
+  const latest = { recommendationId: 'rec-2' }
+
+  assert.equal(latestWorkflowResource([first, latest]), latest)
+  assert.equal(latestWorkflowResource([]), null)
+  assert.equal(latestWorkflowResource(undefined), null)
 })
 
 test('mapeia documentos e marcadores do gateway mock', () => {

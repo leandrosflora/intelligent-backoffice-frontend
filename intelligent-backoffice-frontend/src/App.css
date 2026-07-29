@@ -663,6 +663,66 @@ main {
   font: 10px/1.2 "SFMono-Regular", Consolas, monospace;
 }
 
+.authenticated-context {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #cae9e5;
+  border-radius: 13px;
+  background: #f3fbfa;
+}
+
+.authenticated-context > span strong,
+.authenticated-context > span small {
+  display: block;
+}
+
+.authenticated-context > span small {
+  margin-top: 3px;
+  overflow: hidden;
+  color: var(--ink-500);
+  font: 10px/1.4 "SFMono-Regular", Consolas, monospace;
+  text-overflow: ellipsis;
+}
+
+.authenticated-context dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.authenticated-context dl > div {
+  display: grid;
+  grid-template-columns: 60px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.authenticated-context dt {
+  color: var(--ink-500);
+}
+
+.authenticated-context dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.authenticated-context p {
+  color: var(--ink-500);
+  font-size: 10px;
+  line-height: 1.5;
+}
+
+.session-button {
+  padding: 6px 10px;
+  border: 1px solid var(--ink-300);
+  border-radius: 9px;
+  background: #fff;
+  color: var(--ink-700);
+  font-size: 11px;
+  font-weight: 780;
+}
+
 .form-grid {
   display: grid;
   gap: 14px;
