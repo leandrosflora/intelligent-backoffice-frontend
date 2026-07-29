@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   documentAiOutcome,
+  documentRegistrationNotice,
   findDocumentEvidence,
   formatFileSize,
   mediaTypeForDocument,
@@ -37,7 +38,7 @@ test('localiza evidência vinculada ao documento', () => {
   assert.equal(findDocumentEvidence(evidence, 'doc-3'), null)
 })
 
-test('explica confirmação, abstention e rejeição', () => {
+test('explica confirmação, revisão humana, inconsistência e rejeição', () => {
   const confirmed = documentAiOutcome(
     { status: 'VALIDATED' },
     { confidence: 0.93 },
@@ -45,13 +46,29 @@ test('explica confirmação, abstention e rejeição', () => {
   assert.equal(confirmed.tone, 'success')
   assert.match(confirmed.detail, /93%/)
 
-  const abstained = documentAiOutcome({ status: 'VALIDATED' }, null)
-  assert.equal(abstained.tone, 'warning')
-  assert.match(abstained.detail, /abstido/)
+  const reviewRequired = documentAiOutcome({ status: 'REVIEW_REQUIRED' }, null)
+  assert.equal(reviewRequired.tone, 'warning')
+  assert.match(reviewRequired.label, /Revisão humana/)
+
+  const inconsistent = documentAiOutcome({ status: 'VALIDATED' }, null)
+  assert.equal(inconsistent.tone, 'warning')
+  assert.match(inconsistent.label, /sem evidência/)
 
   const rejected = documentAiOutcome({ status: 'REJECTED', rejectionReasons: ['malware'] }, null)
   assert.equal(rejected.tone, 'danger')
   assert.match(rejected.detail, /malware/)
+})
+
+test('cria notificações coerentes com o status documental', () => {
+  assert.equal(documentRegistrationNotice({ status: 'VALIDATED' }).type, 'success')
+
+  const reviewRequired = documentRegistrationNotice({ status: 'REVIEW_REQUIRED' })
+  assert.equal(reviewRequired.type, 'warning')
+  assert.match(reviewRequired.message, /caso não avançou/)
+
+  const rejected = documentRegistrationNotice({ status: 'REJECTED', rejectionReasons: ['arquivo inseguro'] })
+  assert.equal(rejected.type, 'error')
+  assert.match(rejected.message, /arquivo inseguro/)
 })
 
 test('formata tamanhos de arquivo', () => {
