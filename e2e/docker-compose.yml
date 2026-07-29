@@ -57,6 +57,21 @@ services:
       redpanda:
         condition: service_healthy
 
+  jaeger:
+    image: jaegertracing/all-in-one:1.68.0
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+    ports:
+      - "${JAEGER_PORT:-16686}:16686"
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.131.0
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    volumes:
+      - ../../intelligent-backoffice-platform-architecture/observability/otel/collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    depends_on:
+      - jaeger
+
   backend:
     build:
       context: ../../backoffice-platform-api
@@ -64,6 +79,7 @@ services:
     environment:
       ConnectionStrings__Backoffice: Host=postgres;Port=5432;Database=backoffice;Username=backoffice;Password=backoffice
       Opa__BaseUrl: http://opa:8181
+      Otel__Endpoint: http://otel-collector:4317
       Identity__Mode: headers
       DocumentIntelligence__Mode: Fake
     ports:
@@ -87,6 +103,7 @@ services:
     environment: &worker-environment
       ConnectionStrings__Backoffice: Host=postgres;Port=5432;Database=backoffice;Username=backoffice;Password=backoffice
       Opa__BaseUrl: http://opa:8181
+      Otel__Endpoint: http://otel-collector:4317
       Kafka__BootstrapServers: redpanda:9092
       Kafka__EventsTopic: backoffice.events.v1
       Kafka__DlqTopic: backoffice.dlq.v1
