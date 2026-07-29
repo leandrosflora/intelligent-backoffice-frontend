@@ -74,6 +74,32 @@ export function findDocumentEvidence(evidence, documentId) {
   return evidence.find((item) => String(item.sourceReference) === String(documentId)) || null
 }
 
+export function documentRegistrationNotice(document) {
+  if (document?.status === 'VALIDATED') {
+    return {
+      type: 'success',
+      message: 'Documento confirmado pela IA e evidência criada.',
+    }
+  }
+  if (document?.status === 'REVIEW_REQUIRED') {
+    return {
+      type: 'warning',
+      message: 'Documento recebido, mas a IA não confirmou o tipo. Revisão humana necessária; o caso não avançou.',
+    }
+  }
+  if (document?.status === 'REJECTED') {
+    const reason = document.rejectionReasons?.join('; ')
+    return {
+      type: 'error',
+      message: reason ? `Documento rejeitado: ${reason}` : 'Documento rejeitado antes da análise de IA.',
+    }
+  }
+  return {
+    type: 'warning',
+    message: `Documento registrado com status ${document?.status || 'desconhecido'}. Atualize o caso antes de continuar.`,
+  }
+}
+
 export function documentAiOutcome(document, evidence) {
   if (!document) return null
   if (document.status === 'REJECTED') {
@@ -83,16 +109,30 @@ export function documentAiOutcome(document, evidence) {
       detail: document.rejectionReasons?.join('; ') || 'O arquivo foi rejeitado antes da análise de IA.',
     }
   }
-  if (evidence) {
+  if (document.status === 'REVIEW_REQUIRED') {
+    return {
+      tone: 'warning',
+      label: 'Revisão humana necessária',
+      detail: 'A IA se absteve ou classificou um tipo diferente. O documento não valida o caso até ser revisado.',
+    }
+  }
+  if (document.status === 'VALIDATED' && evidence) {
     return {
       tone: 'success',
       label: 'Classificação confirmada pela IA',
       detail: `Evidência criada com ${(Number(evidence.confidence || 0) * 100).toFixed(0)}% de confiança.`,
     }
   }
+  if (document.status === 'VALIDATED') {
+    return {
+      tone: 'warning',
+      label: 'Validação sem evidência vinculada',
+      detail: 'O backend marcou o documento como validado, mas nenhuma evidência correspondente foi encontrada. Atualize os dados e investigue a inconsistência.',
+    }
+  }
   return {
     tone: 'warning',
-    label: 'IA não confirmou o tipo declarado',
-    detail: 'O documento foi processado, mas não houve evidência. A IA pode ter abstido, classificado outro tipo ou estar indisponível.',
+    label: 'Processamento documental pendente',
+    detail: `O documento está em ${document.status || 'estado desconhecido'} e ainda não pode validar o caso.`,
   }
 }

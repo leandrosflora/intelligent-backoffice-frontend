@@ -149,7 +149,7 @@ export default function DocumentValidation() {
           <a href="#/" className="validator-back">← Voltar ao console operacional</a>
           <span className="validator-kicker">Document Intelligence</span>
           <h1>Validação documental com IA</h1>
-          <p>Envie um arquivo real para o backend .NET, acompanhe a classificação e confirme se uma evidência foi criada pela IA.</p>
+          <p>Envie um arquivo real para o backend .NET e acompanhe se a IA confirmou o tipo ou encaminhou o documento para revisão humana.</p>
         </div>
         <div className="validator-header-status">
           <span>Fluxo real</span>
@@ -161,7 +161,7 @@ export default function DocumentValidation() {
       <section className="validator-flow" aria-label="Etapas da validação">
         <div><span>1</span><strong>Upload seguro</strong><small>Arquivo, tipo esperado e versão do caso.</small></div>
         <div><span>2</span><strong>Análise IA/OCR</strong><small>Classificação, extração e abstention guardrail.</small></div>
-        <div><span>3</span><strong>Evidência auditável</strong><small>Confiança vinculada ao documento e ao caso.</small></div>
+        <div><span>3</span><strong>Evidência ou revisão</strong><small>Confirmação gera evidência; incerteza exige decisão humana.</small></div>
       </section>
 
       <div className="validator-layout">
@@ -204,7 +204,7 @@ export default function DocumentValidation() {
 
           <div className="validator-policy-note">
             <strong>O que será validado</strong>
-            <p>Malware scan, checksum SHA-256 no servidor, classificação independente do tipo declarado e criação de evidência apenas quando a IA confirma o tipo com confiança suficiente.</p>
+            <p>Verificação de segurança configurada no backend, checksum SHA-256, classificação independente do tipo declarado e evidência apenas quando a IA confirma o tipo. Abstention ou divergência exige revisão humana.</p>
           </div>
 
           {error && <div className="validator-alert validator-alert-danger">{error}</div>}
@@ -240,7 +240,7 @@ export default function DocumentValidation() {
 
               <div className="validator-result-grid">
                 <ResultCard label="Status documental" value={documentResult.status} detail={documentResult.documentType} />
-                <ResultCard label="Confiança da IA" value={matchedEvidence ? `${(Number(matchedEvidence.confidence) * 100).toFixed(0)}%` : 'Sem evidência'} detail={matchedEvidence?.evidenceType || 'Abstention ou divergência'} />
+                <ResultCard label="Confiança da IA" value={matchedEvidence ? `${(Number(matchedEvidence.confidence) * 100).toFixed(0)}%` : 'Sem evidência'} detail={matchedEvidence?.evidenceType || aiOutcome?.label} />
                 <ResultCard label="Versão atual do caso" value={caseSnapshot?.caseVersion ? `v${caseSnapshot.caseVersion}` : '—'} detail={caseSnapshot?.state || 'Caso não consultado'} />
                 <ResultCard label="Latência do upload" value={requestMeta ? `${requestMeta.elapsedMs} ms` : '—'} detail={`HTTP ${requestMeta?.status || '—'}`} />
               </div>
