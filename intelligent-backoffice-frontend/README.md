@@ -163,7 +163,7 @@ Mantém a identidade selecionada em todas as chamadas. Esse modo permite validar
 
 ## Continuidade da jornada
 
-O backend expõe listagem de casos, evidências, execuções e timeline. Recomendações e aprovações ainda não possuem endpoints de consulta; os recursos intermediários retornados durante a jornada são mantidos no `localStorage` por `caseId`.
+O backend expõe listagem de casos, evidências, execuções, timeline, recomendações e aprovações. Ao abrir um caso, a UI reidrata os recursos persistidos; o `localStorage` por `caseId` funciona apenas como cache de continuidade durante rollout ou indisponibilidade temporária.
 
 ## Qualidade
 
