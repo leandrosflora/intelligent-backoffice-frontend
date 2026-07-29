@@ -14,5 +14,7 @@ test('creates a governed case through the real frontend and backend', async ({ p
   await expect(page.locator('.case-hero .eyebrow')).toHaveText(externalReference)
   await expect(page.locator('.case-hero-status')).toContainText('Caso aberto')
   await expect(page.getByRole('heading', { name: 'Registrar documento' })).toBeVisible()
-  await expect(page.getByText('Case version 1')).toBeVisible()
+
+  const versionMetric = page.locator('.case-metrics .metric-card').filter({ hasText: 'Versão do caso' })
+  await expect(versionMetric).toContainText('v1')
 })
