@@ -1,0 +1,66 @@
+name: intelligent-backoffice-e2e
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: backoffice
+      POSTGRES_USER: backoffice
+      POSTGRES_PASSWORD: backoffice
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U backoffice -d backoffice"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  opa:
+    image: openpolicyagent/opa:1.18.2-static
+    command: ["run", "--server", "--addr=0.0.0.0:8181", "/policies"]
+    volumes:
+      - ../../intelligent-backoffice-platform-architecture/policies:/policies:ro
+    healthcheck:
+      test: ["CMD", "/opa", "eval", "1"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build:
+      context: ../../backoffice-platform-api
+      dockerfile: src/Backoffice.Api/Dockerfile
+    environment:
+      ConnectionStrings__Backoffice: Host=postgres;Port=5432;Database=backoffice;Username=backoffice;Password=backoffice
+      Opa__BaseUrl: http://opa:8181
+      Identity__Mode: headers
+      DocumentIntelligence__BaseUrl: http://document-intelligence.invalid
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      opa:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8080 && printf 'GET /health/ready HTTP/1.0\\r\\n\\r\\n' >&3"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+
+  frontend:
+    build:
+      context: ..
+    environment:
+      BACKEND_URL: http://backend:8080
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null"]
+      interval: 3s
+      timeout: 3s
+      retries: 20

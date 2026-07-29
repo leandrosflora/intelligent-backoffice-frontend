@@ -164,6 +164,29 @@ npm run check
 
 O comando executa ESLint, testes Node e build Vite. Os testes cobrem mapeamento de formatos, tamanho, extensão, vínculo da evidência e interpretação do resultado da IA.
 
+### E2E cross-repo
+
+Com os três repositórios no mesmo diretório pai, o Compose de E2E sobe PostgreSQL,
+OPA, a API .NET e o frontend Nginx:
+
+```bash
+docker compose -f e2e/docker-compose.yml up -d --build --wait
+cd intelligent-backoffice-frontend
+npm ci
+npx playwright install chromium
+npm run test:e2e
+```
+
+O teste Playwright cria um caso pela interface real, atravessa o proxy Nginx,
+executa a policy no OPA e persiste o caso no PostgreSQL. O workflow
+`Cross-repository E2E` executa essa jornada em cada pull request.
+
+Para encerrar:
+
+```bash
+docker compose -f e2e/docker-compose.yml down --volumes --remove-orphans
+```
+
 ## Limitações
 
 - o frontend usa as identidades por headers da baseline; o profile JWT ainda não possui login no navegador;
