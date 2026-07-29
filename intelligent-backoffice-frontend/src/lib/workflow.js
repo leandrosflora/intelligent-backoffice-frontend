@@ -86,6 +86,10 @@ export function normalizeCases(values) {
   return Array.isArray(values) ? values.map(normalizeCase) : []
 }
 
+export function latestWorkflowResource(values) {
+  return Array.isArray(values) && values.length > 0 ? values.at(-1) : null
+}
+
 export function formatState(state) {
   return STATE_LABELS[state] || state || 'Desconhecido'
 }

@@ -7,12 +7,13 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test": "node --test src/lib/*.test.js",
+    "test": "node --test \"src/**/*.test.js\"",
     "test:e2e": "playwright test",
     "check": "npm run lint && npm run test && npm run build",
     "preview": "vite preview"
   },
   "dependencies": {
+    "oidc-client-ts": "^3.5.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

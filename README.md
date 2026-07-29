@@ -11,9 +11,11 @@ Console React para operar e validar o backend [.NET Backoffice Platform API](htt
 - upload `multipart/form-data` de PDF, PNG, JPG, DOCX e XLSX;
 - classificação documental com IA, abstention e evidência com confiança;
 - investigação, recomendação e aprovação humana;
+- reidratação de recomendações e aprovações persistidas pelo backend;
 - execução governada, idempotência e reconciliação;
 - evidências, execuções, timeline e console HTTP;
-- modo guiado ou identidade manual para testar policies.
+- login OIDC por Authorization Code + PKCE, com bearer token em sessão;
+- modo guiado ou identidade manual por headers para testes locais de policy.
 
 ## Validação documental com IA
 
@@ -32,7 +34,7 @@ O workspace dedicado:
 - diferencia confirmação da IA, abstention/divergência e rejeição;
 - mostra confiança, checksum, correlation ID, latência e respostas técnicas.
 
-A evidência só é criada quando a IA não abstém e a classificação encontrada corresponde ao tipo documental declarado. Um documento pode ficar `VALIDATED` sem gerar evidência quando o modelo abstém, identifica outro tipo ou o serviço de análise fica indisponível.
+A evidência só é criada quando a IA não abstém e a classificação encontrada corresponde ao tipo documental declarado. Em caso de abstention ou divergência, o documento fica em `REVIEW_REQUIRED`, sem evidência, e o caso permanece em `DOCUMENTS_RECEIVED` para revisão manual.
 
 ## Pré-requisitos
 
@@ -92,6 +94,21 @@ Abra:
 - console operacional: `http://localhost:5173`;
 - validação documental: `http://localhost:5173/#/document-validation`.
 
+O modo padrão é `headers`, compatível com a baseline e com o E2E. Para usar OIDC:
+
+```bash
+VITE_AUTH_MODE=oidc \
+VITE_OIDC_AUTHORITY=https://identity.example.com/realms/backoffice \
+VITE_OIDC_CLIENT_ID=intelligent-backoffice-spa \
+VITE_OIDC_SCOPE="openid profile roles" \
+VITE_OIDC_AUDIENCE=backoffice-api \
+npm run dev
+```
+
+Registre `http://localhost:5173/auth/callback` como redirect URI e
+`http://localhost:5173/` como post-logout URI. A SPA é cliente público: não
+configure client secret.
+
 ### Frontend em Docker
 
 Na raiz deste repositório:
@@ -111,6 +128,38 @@ Para alterar a porta:
 BACKEND_URL=http://host.docker.internal:8080 FRONTEND_PORT=3001 docker compose up -d --build
 ```
 
+No container, OIDC é configuração de runtime e não exige reconstruir a imagem:
+
+```bash
+BACKEND_URL=http://host.docker.internal:8080 \
+AUTH_MODE=oidc \
+OIDC_AUTHORITY=https://identity.example.com/realms/backoffice \
+OIDC_CLIENT_ID=intelligent-backoffice-spa \
+OIDC_SCOPE="openid profile roles" \
+OIDC_AUDIENCE=backoffice-api \
+docker compose up -d
+```
+
+Nesse caso, registre `http://localhost:3000/auth/callback` e
+`http://localhost:3000/` no provedor.
+
+## Modos de autenticação
+
+| Modo | Uso | Identidade enviada |
+|---|---|---|
+| `headers` | desenvolvimento e E2E controlado | `X-Tenant-Id`, `X-Subject-*`, `X-Roles` e, na aprovação, `X-Authority-Limit` |
+| `oidc` | integração real com IdP | apenas `Authorization: Bearer <access_token>` |
+
+O fluxo OIDC usa Authorization Code + PKCE. Usuário, estado de protocolo e
+tokens ficam em `sessionStorage`; fechar a aba encerra o contexto local.
+Redirects de retorno externos são rejeitados.
+
+No modo OIDC, tenant, sujeito, tipo, papéis, propósito e alçada são claims do
+token validado pelo backend. A UI não permite trocar esses valores e remove
+headers de identidade mesmo se um componente tentar fornecê-los. Uma sessão
+representa um único principal; etapas que exigem outro papel ou um workload
+devem receber outro token e podem retornar `403` na sessão atual.
+
 ## Como validar a IA
 
 1. Crie um caso no console operacional.
@@ -120,7 +169,7 @@ BACKEND_URL=http://host.docker.internal:8080 FRONTEND_PORT=3001 docker compose u
 5. Envie o documento.
 6. Verifique o resultado:
    - **Classificação confirmada:** evidência criada com confiança;
-   - **IA não confirmou:** documento processado sem evidência;
+   - **IA não confirmou:** documento encaminhado para revisão manual, sem evidência;
    - **Documento rejeitado:** malware scan ou validação anterior à IA falhou.
 
 Tipos esperados por jornada:
@@ -144,6 +193,9 @@ X-Subject-Id: document-processor-1
 X-Subject-Type: WORKLOAD
 X-Roles: document-processor
 ```
+
+Esses headers pertencem apenas ao modo local `headers`. No modo OIDC, a
+requisição contém o bearer token e o backend deriva o contexto das claims.
 
 Campos do formulário:
 
@@ -189,10 +241,11 @@ docker compose -f e2e/docker-compose.yml down --volumes --remove-orphans
 
 ## Limitações
 
-- o frontend usa as identidades por headers da baseline; o profile JWT ainda não possui login no navegador;
+- o IdP e o backend precisam emitir/validar as claims de domínio (`tenant_id`,
+  `subject_type`, `roles`, `purpose` e `authority_limit` quando aplicável);
+- uma sessão OIDC humana não simula workloads exigidos por algumas etapas;
 - a análise real consome a API da OpenAI e pode gerar custo;
 - os campos extraídos pela IA ainda não são retornados no `DocumentResponse`; a UI confirma a análise pela evidência persistida;
-- recomendações e aprovações intermediárias continuam no `localStorage`, pois o backend não expõe consulta desses recursos;
 - a execução financeira permanece mock;
 - solução demonstrativa, não classificada como pronta para produção.
 

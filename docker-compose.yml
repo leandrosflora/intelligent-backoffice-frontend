@@ -4,6 +4,11 @@ services:
       context: .
     environment:
       BACKEND_URL: ${BACKEND_URL:-http://host.docker.internal:5260}
+      AUTH_MODE: ${AUTH_MODE:-headers}
+      OIDC_AUTHORITY: ${OIDC_AUTHORITY:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_SCOPE: ${OIDC_SCOPE:-openid profile}
+      OIDC_AUDIENCE: ${OIDC_AUDIENCE:-}
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     extra_hosts:

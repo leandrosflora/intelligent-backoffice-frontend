@@ -1,0 +1,7 @@
+window.__BACKOFFICE_CONFIG__ = {
+  authMode: "${AUTH_MODE}",
+  oidcAuthority: "${OIDC_AUTHORITY}",
+  oidcClientId: "${OIDC_CLIENT_ID}",
+  oidcScope: "${OIDC_SCOPE}",
+  oidcAudience: "${OIDC_AUDIENCE}"
+}

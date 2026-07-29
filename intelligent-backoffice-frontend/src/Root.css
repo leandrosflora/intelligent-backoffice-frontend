@@ -18,6 +18,67 @@
   transition: transform 160ms ease, border-color 160ms ease;
 }
 
+.auth-state {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 20% 10%, rgba(52, 213, 200, 0.15), transparent 30%),
+    linear-gradient(145deg, #08111f, #111827 58%, #102a2a);
+}
+
+.auth-state section {
+  width: min(440px, 100%);
+  padding: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 24px;
+  background: rgba(17, 24, 39, 0.88);
+  color: #fff;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.3);
+  text-align: center;
+}
+
+.auth-state-mark {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 16px;
+  border-radius: 17px;
+  background: linear-gradient(145deg, #34d5c8, #13877f);
+  color: #06201e;
+  font-weight: 950;
+}
+
+.auth-state small {
+  color: #8ea1b5;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.auth-state h1 {
+  margin: 16px 0 8px;
+  font-size: 25px;
+}
+
+.auth-state p {
+  margin: 0;
+  color: #aebbc9;
+  line-height: 1.6;
+}
+
+.auth-state button {
+  margin-top: 24px;
+  padding: 11px 18px;
+  border: 0;
+  border-radius: 11px;
+  background: #34d5c8;
+  color: #06201e;
+  font-weight: 850;
+}
+
 .ai-validator-launcher:hover {
   transform: translateY(-2px);
   border-color: rgba(52, 213, 200, 0.65);
