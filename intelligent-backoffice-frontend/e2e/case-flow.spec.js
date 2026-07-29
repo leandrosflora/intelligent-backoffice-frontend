@@ -38,6 +38,28 @@ async function approve(page) {
   await expect(page.getByRole('heading', { name: 'Execução governada' })).toBeVisible({ timeout: 15_000 })
 }
 
+async function caseIdFromHero(page) {
+  const text = await page.locator('.case-hero .case-id-line code').innerText()
+  return text.trim()
+}
+
+async function expectOutboxDispatched(page, caseId) {
+  const auditorHeaders = {
+    'X-Tenant-Id': 'tenant-demo',
+    'X-Subject-Id': 'auditor-1',
+    'X-Subject-Type': 'HUMAN',
+    'X-Roles': 'auditor',
+  }
+
+  await expect(async () => {
+    const response = await page.request.get('/api/v1/operations/outbox?limit=200', { headers: auditorHeaders })
+    expect(response.ok()).toBe(true)
+    const rows = (await response.json()).filter((row) => row.aggregateId === caseId)
+    expect(rows.length).toBeGreaterThan(0)
+    expect(rows.every((row) => row.status === 'PUBLISHED')).toBe(true)
+  }).toPass({ timeout: 20_000, intervals: [1_000, 2_000, 3_000] })
+}
+
 test('creates a governed case through the real frontend and backend', async ({ page }) => {
   const externalReference = `e2e-${Date.now()}`
   await createGovernedCase(page, externalReference)
@@ -57,6 +79,24 @@ test('drives the full governed-execution chain to EXECUTED through the real UI',
 
   await expect(page.locator('.case-hero-status')).toContainText('Executado', { timeout: 15_000 })
   await expect(page.getByRole('heading', { name: 'Jornada sem ação pendente' })).toBeVisible()
+})
+
+test('dispatches outbox events produced by a browser-driven case in the integrated environment', async ({ page }) => {
+  test.setTimeout(60_000)
+  const externalReference = `e2e-eventing-${Date.now()}`
+
+  await createGovernedCase(page, externalReference)
+  const caseId = await caseIdFromHero(page)
+
+  await registerReceiptDocument(page)
+  await investigateAndRecommend(page)
+  await approve(page)
+
+  await page.locator('input[name="executionMode"][value="SUCCESS"]').check()
+  await page.getByRole('button', { name: 'Solicitar execução' }).click()
+  await expect(page.locator('.case-hero-status')).toContainText('Executado', { timeout: 15_000 })
+
+  await expectOutboxDispatched(page, caseId)
 })
 
 test('resolves an ambiguous execution through reconciliation to EXECUTED through the real UI', async ({ page }) => {

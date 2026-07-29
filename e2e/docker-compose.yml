@@ -26,6 +26,37 @@ services:
       timeout: 3s
       retries: 20
 
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.1.14
+    command:
+      - redpanda
+      - start
+      - --kafka-addr internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr internal://redpanda:9092,external://localhost:19092
+      - --rpc-addr redpanda:33145
+      - --advertise-rpc-addr redpanda:33145
+      - --mode dev-container
+      - --smp 1
+      - --default-log-level=info
+    healthcheck:
+      test: ["CMD", "rpk", "cluster", "info", "-X", "brokers=localhost:9092"]
+      interval: 5s
+      timeout: 10s
+      retries: 20
+      start_period: 10s
+
+  redpanda-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.1.14
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        rpk topic create backoffice.events.v1 --partitions 3 --replicas 1 -X brokers=redpanda:9092 || true;
+        rpk topic create backoffice.dlq.v1 --partitions 1 --replicas 1 -X brokers=redpanda:9092 || true;
+        rpk topic list -X brokers=redpanda:9092
+    depends_on:
+      redpanda:
+        condition: service_healthy
+
   backend:
     build:
       context: ../../backoffice-platform-api
@@ -48,6 +79,53 @@ services:
       timeout: 3s
       retries: 30
       start_period: 5s
+
+  outbox-dispatcher:
+    build:
+      context: ../../backoffice-platform-api
+      dockerfile: src/Backoffice.Workers/Dockerfile
+    environment: &worker-environment
+      ConnectionStrings__Backoffice: Host=postgres;Port=5432;Database=backoffice;Username=backoffice;Password=backoffice
+      Opa__BaseUrl: http://opa:8181
+      Kafka__BootstrapServers: redpanda:9092
+      Kafka__EventsTopic: backoffice.events.v1
+      Kafka__DlqTopic: backoffice.dlq.v1
+      Kafka__ConsumerGroup: backoffice-workflow-v1
+      Worker__Role: outbox-dispatcher
+    depends_on:
+      backend:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  workflow-worker:
+    build:
+      context: ../../backoffice-platform-api
+      dockerfile: src/Backoffice.Workers/Dockerfile
+    environment:
+      <<: *worker-environment
+      Worker__Role: workflow-consumer
+    depends_on:
+      backend:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  timer-worker:
+    build:
+      context: ../../backoffice-platform-api
+      dockerfile: src/Backoffice.Workers/Dockerfile
+    environment:
+      <<: *worker-environment
+      Worker__Role: timer-firing
+    depends_on:
+      backend:
+        condition: service_healthy
+      redpanda-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
   frontend:
     build:
