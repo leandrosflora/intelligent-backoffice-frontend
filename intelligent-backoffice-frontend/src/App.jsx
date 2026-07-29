@@ -11,6 +11,7 @@ import {
   createId,
   formatMoney,
   formatState,
+  latestWorkflowResource,
   mediaTypeForFilename,
   nextActionForState,
   normalizeCase,
@@ -328,22 +329,35 @@ function App() {
 
   async function loadCaseData(caseId = activeCase?.caseId) {
     if (!caseId) return
-    const [evidenceResult, executionsResult, timelineResult] = await Promise.all([
+    const [evidenceResult, executionsResult, timelineResult, recommendationsResult, approvalsResult] = await Promise.all([
       client.request(`/v1/cases/${caseId}/evidence`, requestOptions('readEvidence')),
       client.request(`/v1/cases/${caseId}/executions`, requestOptions('readExecution')),
       client.request(`/v1/cases/${caseId}/timeline`, requestOptions('timeline')),
+      client.request(`/v1/cases/${caseId}/recommendations`, requestOptions('readCase')),
+      client.request(`/v1/cases/${caseId}/approvals`, requestOptions('readCase')),
     ])
     addLog('Consultar evidências', evidenceResult)
     addLog('Consultar execuções', executionsResult)
     addLog('Consultar timeline', timelineResult)
+    addLog('Consultar recomendações', recommendationsResult)
+    addLog('Consultar aprovações', approvalsResult)
     if (evidenceResult.ok) setEvidence(Array.isArray(evidenceResult.data) ? evidenceResult.data : [])
     if (executionsResult.ok) {
       const values = Array.isArray(executionsResult.data) ? executionsResult.data : []
       setExecutions(values)
-      const latest = values.at(-1)
+      const latest = latestWorkflowResource(values)
       if (latest?.executionId) persistResources(caseId, { execution: latest })
     }
     if (timelineResult.ok) setTimeline(Array.isArray(timelineResult.data) ? timelineResult.data : [])
+
+    const resourcePatch = {}
+    if (recommendationsResult.ok) {
+      resourcePatch.recommendation = latestWorkflowResource(recommendationsResult.data)
+    }
+    if (approvalsResult.ok) {
+      resourcePatch.approval = latestWorkflowResource(approvalsResult.data)
+    }
+    if (Object.keys(resourcePatch).length > 0) persistResources(caseId, resourcePatch)
   }
 
   async function createCase(event) {
@@ -743,7 +757,7 @@ function App() {
               </div>
             )}
             {renderActionPanel()}
-            <Panel title="Recursos da jornada" description="Identificadores persistidos no workspace local para continuidade entre etapas.">
+            <Panel title="Recursos da jornada" description="Recursos persistidos pelo backend e mantidos em cache local para continuidade entre etapas.">
               <div className="resource-grid">
                 {resourceKeys.map(([key, label]) => {
                   const value = activeResources[key]?.[`${key}Id`]
