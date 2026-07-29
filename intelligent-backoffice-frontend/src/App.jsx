@@ -757,7 +757,7 @@ function App() {
               </div>
             )}
             {renderActionPanel()}
-            <Panel title="Recursos da jornada" description="Identificadores persistidos no workspace local para continuidade entre etapas.">
+            <Panel title="Recursos da jornada" description="Recursos persistidos pelo backend e mantidos em cache local para continuidade entre etapas.">
               <div className="resource-grid">
                 {resourceKeys.map(([key, label]) => {
                   const value = activeResources[key]?.[`${key}Id`]
